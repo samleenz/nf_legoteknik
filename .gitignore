@@ -2,6 +2,7 @@
 .nextflow/
 work/
 .nextflow.log
+.nextflow.log.*
 nextflow.log
 nextflow.log.*
 .nextflow.log.old
@@ -18,3 +19,5 @@ output/
 *~
 .vscode/
 .idea/
+.Rproj.user
+*.Rproj
