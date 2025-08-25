@@ -1,0 +1,7 @@
+[Header]
+FileFormatVersion,2
+RunName,TPH_SGRESIST_L002
+[BCLConvert_Settings]
+CreateFastqForIndexReads,0
+[BCLConvert_Data]
+Sample_ID,index,index2

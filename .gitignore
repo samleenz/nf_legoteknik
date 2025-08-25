@@ -1,0 +1,20 @@
+# Nextflow temporary files and logs
+.nextflow/
+work/
+.nextflow.log
+nextflow.log
+nextflow.log.*
+.nextflow.log.old
+nextflow.config.old
+.nextflow.config.old
+
+# Output directories (adjust as needed based on your pipeline's output structure)
+results/
+output/
+
+# Common editor/OS specific files
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/

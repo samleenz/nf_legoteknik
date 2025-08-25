@@ -1,0 +1,8 @@
+[Header]
+FileFormatVersion,2
+RunName,LeGOteknik
+[BCLConvert_Settings]
+OverrideCycles,Y28;I8N2;N10;Y90
+CreateFastqForIndexReads,0
+[BCLConvert_Data]
+Sample_ID,index
