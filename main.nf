@@ -15,22 +15,27 @@ process bclconvert_samplesheets {
 
     input:
     path(sampletable)
+    path(single_template)
+    path(dual_template)
+    path(single_index)
+    path(dual_index)
 
     output:
     path("gex_samplesheet.csv"), emit: gex_samplesheet
+    path("legotek_samplesheet.csv"), emit: legotek_samplesheet
 
 
     script:
     """
-    echo \\${PATH}
-
-    Rscript make_bclconvert_samplesheets.R ${sampletable}   
+    make_bclconvert_samplesheets.R ${sampletable} \
+        ${single_template} ${dual_template} \
+        ${single_index} ${dual_index} 
     """
 }
 
 
 // Process for demultiplexing the LeGOteknik fastqs
-process demux_teknik {
+process demux_legotek {
     container params.container_bclconvert 
     cpus 24
     memory "64.G"
@@ -45,10 +50,12 @@ process demux_teknik {
 
     script:
     """
-    bclconvert \
+    mkdir -p fastq
+
+    bcl-convert \
         --bcl-input-directory ${bcl_dir} \
         --output-directory "fastq/teknik" \
-        --samplesheet ${bcl_samplesheet} \
+        --sample-sheet ${bcl_samplesheet} \
         --bcl-num-conversion-threads 16 \
         --bcl-num-compression-threads 8
     """
@@ -70,10 +77,12 @@ process demux_gex {
 
     script:
     """
-    bclconvert \
+    mkdir -p fastq
+
+    bcl-convert \
         --bcl-input-directory ${bcl_dir} \
         --output-directory "fastq/gex" \
-        --samplesheet ${bcl_samplesheet} \
+        --sample-sheet ${bcl_samplesheet} \
         --bcl-num-conversion-threads 16 \
         --bcl-num-compression-threads 8
     """
@@ -82,7 +91,30 @@ process demux_gex {
 // Define the workflow by chaining the processes
 workflow {
     bcl_samplesheets_ch = bclconvert_samplesheets(
-        file(params.sampletable)
-    ).view ()
+        file(params.sampletable),
+        file(params.single_template),
+        file(params.dual_template),
+        file(params.single_index),
+        file(params.dual_index)
+    )
+
+    // bcl_samplesheets_ch.gex_samplesheet.view()
+    // bcl_samplesheets_ch.legotek_samplesheet.view()
+
+
+    // generate fastq files from the bcl directory
+    fastq_gex_ch = demux_gex(
+        file(params.bcl_dir),
+        bcl_samplesheets_ch.gex_samplesheet
+    )
+
+    fastq_legotek_ch = demux_legotek(
+        file(params.bcl_dir),
+        bcl_samplesheets_ch.legotek_samplesheet
+    )
     
+    fastq_gex_ch.view()
+    fastq_legotek_ch.view()
+
+    // 
 }

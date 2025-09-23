@@ -5,9 +5,25 @@
 
 library(tidyverse)
 
-# sampletable path
-s_path <- commandArgs(trailingOnly=TRUE)
-# s_path <- "data/example_sampletable.csv"
+### commandline arguments ------------------------------------------------------
+args <- commandArgs(trailingOnly = TRUE)
+
+if (length(args) < 5) {
+  stop("
+  Usage: make_bcl_sheet.R \\
+    <sampletable.csv> \\
+    <single_template.txt> \\
+    <dual_template.txt> \\
+    <single_index.json> \\
+    <dual_index.json>
+  ")
+}
+
+s_path          <- args[1] # sample table CSV
+single_template <- args[2] # path to bclconvert_single_template.txt
+dual_template   <- args[3] # path to bclconvert_dual_template.txt
+single_index    <- args[4] # path to truseq_i7_indexes.json
+dual_index      <- args[5] # path to chromium_10X_indexes.json
 
 
 ### custom functions -------------------------------------------------------
@@ -37,11 +53,13 @@ reverse_complement <- function(dna) {
 
 
 
-make_bcl_sheet <- function(index, type, revcomp = TRUE){
+make_bcl_sheet <- function(index, type, revcomp = TRUE,
+                           single_template, dual_template,
+                           single_idx, dual_idx){
   if(type == "single"){
     # print("single")
-    template <- readLines("data/bcl_samplesheet_templates/bclconvert_single_template.txt")
-    single_index <- jsonlite::read_json("data/truseq_i7_indexes.json")
+    template <- readLines(single_template)
+    single_index <- jsonlite::read_json(single_idx)
     
     # get the i7 index seq(s)
     idx <- purrr::map(index, \(x){
@@ -59,8 +77,8 @@ make_bcl_sheet <- function(index, type, revcomp = TRUE){
     )
   } else if(type == "dual"){
     # print("dual")
-    template <- readLines("data/bcl_samplesheet_templates/bclconvert_dual_template.txt")
-    dual_index <- jsonlite::read_json("data/chromium_10X_indexes.json")
+    template <- readLines(dual_template)
+    dual_index <- jsonlite::read_json(dual_idx)
     
     # get the dual index seq(s)
     idx1 <- purrr::map(index, \(x){
@@ -85,7 +103,7 @@ make_bcl_sheet <- function(index, type, revcomp = TRUE){
     # append the sample sheet lines
     bcl_sheet <- c(
       template,
-      paste(sID, idx, idx2, sep=",")
+      paste(sID, idx1, idx2, sep=",")
     )
     
   } else{
@@ -100,11 +118,23 @@ make_bcl_sheet <- function(index, type, revcomp = TRUE){
 sampletable <- read_csv(s_path)
 
 write_lines(
-  make_bcl_sheet(sampletable$feature_index, "single", revcomp = TRUE),
+  make_bcl_sheet(
+    sampletable$feature_index, 
+    "single",
+    revcomp = TRUE,
+    single_template, dual_template,
+    single_index, dual_index
+    ),
   "legotek_samplesheet.csv"
 )
 
 write_lines(
-  make_bcl_sheet(sampletable$gex_index, "dual", revcomp = TRUE),
+  make_bcl_sheet(
+    sampletable$gex_index,
+    "dual",
+    revcomp = TRUE,
+    single_template, dual_template,
+    single_index, dual_index
+    ),
   "gex_samplesheet.csv"
 )
