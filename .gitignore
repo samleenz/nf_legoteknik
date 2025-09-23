@@ -10,6 +10,7 @@ nextflow.config.old
 .nextflow.config.old
 
 # Output directories (adjust as needed based on your pipeline's output structure)
+*_report.html
 results/
 output/
 

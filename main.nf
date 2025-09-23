@@ -88,6 +88,86 @@ process demux_gex {
     """
 }
 
+// Process to create the library csv file for cellranger
+process cellranger_library {
+    container params.container_r
+    cpus 1
+    memory "4G"
+    time "10m"
+
+    input:
+    val(sample)
+    path(library_template)
+
+    output:
+    tuple val(sample), path("lib.csv")
+
+
+
+    script:
+    """
+    sed "s/{{SAMPLE}}/${sample}/g" ${library_template} > lib.csv
+    """ 
+}
+
+// Process to run cellranger on the gex + LeGO fastq files
+// - note, could think about doing a light/heavy version of this 
+//   where --create-bam and --nosecondary are toggled.
+process cellranger_count {
+    container params.container_cellranger 
+    cpus 32
+    memory "128.G"
+    time {"1.0h"}
+    publishDir "${params.out_dir}/multiqc", mode: 'copy'
+
+    input:
+    tuple val(sample), path(library_csv)
+    path(fastq_gex)
+    path(fastq_teknik)
+    path(txome)
+    path(feature_reference)
+
+    output:
+    tuple val(sample), path("${sample}")
+
+    script:
+    """
+    cellranger count \
+        --id=${sample} \
+        --libraries=${library_csv} \
+        --transcriptome=${txome} \
+        --feature-ref=${feature_reference} \
+        --localcores=${task.cpus} \
+        --localmem=${task.memory.toGiga()} \
+        --create-bam=false \
+        --nosecondary
+    """    
+}
+
+process RUN_MULTIQC {
+    cpus 1
+    memory "2.G"
+    time "30.m"
+    container params.container_multiqc
+    publishDir "multiqc/${params.out_dir}", mode: 'copy' 
+    
+
+    input:
+    tuple val(sample), path(cr_dir) 
+
+
+    output:
+    path("${sample}/*")
+    // tuple val(sample), path(output) 
+
+
+    script:
+    """
+    mkdir -p ${sample}
+    multiqc -f -o ${sample} $cr_dir
+    """
+}
+
 // Define the workflow by chaining the processes
 workflow {
     bcl_samplesheets_ch = bclconvert_samplesheets(
@@ -113,8 +193,37 @@ workflow {
         bcl_samplesheets_ch.legotek_samplesheet
     )
     
-    fastq_gex_ch.view()
-    fastq_legotek_ch.view()
+    // fastq_gex_ch.view()
+    // fastq_legotek_ch.view()
 
-    // 
+    // channel of sample names (from sampletable)
+    Channel.fromPath( params.sampletable )
+        .splitCsv( header: true)
+        .map { it.sample_id }
+        .set { sampletable_ch }
+
+    // sampletable_ch.view()
+
+    // create the library csv files
+    library_csv_ch = cellranger_library(
+        sampletable_ch,
+        file(params.library_template)
+    )
+
+    // library_csv_ch.view()
+
+    cellranger_ch = cellranger_count(
+        library_csv_ch,
+        fastq_gex_ch,
+        fastq_legotek_ch,
+        file(params.transcriptome),
+        file(params.feature_reference)
+    )
+
+    // cellranger_ch.view()
+
+    multiqc_ch = RUN_MULTIQC(
+        cellranger_ch
+    )
+
 }

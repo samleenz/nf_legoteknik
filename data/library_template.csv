@@ -1,0 +1,3 @@
+fastqs,sample,library_type
+teknik/,{{SAMPLE}},Antibody Capture
+gex/,{{SAMPLE}},Gene Expression
