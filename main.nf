@@ -2,6 +2,25 @@
 nextflow.enable.dsl=2
 nextflow.preview.output = true
 
+/////////////////////////////////////////
+///////////// NF_LEGOTEKNIK /////////////
+/////////////////////////////////////////
+// Processing of LeGO-teknik scRNA-seq //
+/////////////////////////////////////////
+
+// Pipeline overview
+    // 1. make the samplesheet for bcl-convert
+    // 2. generate fastq files from the bcl directory
+    //      2a. gene expression fastqs
+    //      2b. teknkik barcode fastqs
+    // 3. make the sample table for cellranger
+    //      3a. channel of sample IDs
+    //      3b. create the library csv files
+    // 4. run cellranger per sample
+    // 5. run multiqc on the bcl-convert and cellranger outputs
+
+
+
 // --- params banner (runs at script load) ---
 def _mask = { value, key ->
     def k = key?.toLowerCase() ?: ''
@@ -144,13 +163,12 @@ process cellranger_count {
     path(feature_reference)
 
     output:
-    tuple val(sample), path(out)
+    path(sample)
 
     script:
-    out=sample
     """
     cellranger count \
-        --id=${out} \
+        --id=${sample} \
         --libraries=${library_csv} \
         --transcriptome=${txome} \
         --feature-ref=${feature_reference} \
@@ -161,34 +179,60 @@ process cellranger_count {
     """    
 }
 
+// process run_multiqc {
+//     cpus 1
+//     memory "2.G"
+//     time "30.m"
+//     container params.container_multiqc
+//     // publishDir "${params.out_dir}/multiqc", mode: 'copy' 
+    
+
+//     input:
+//     tuple val(sample), path(cr_dir) 
+
+
+//     output:
+//     // path("${sample}/*")
+//     tuple val(sample), path(out) 
+
+
+//     script:
+//     out="${sample}/multiqc*"
+//     """
+//     mkdir -p ${sample}
+//     multiqc -f -o ${sample} $cr_dir
+//     """
+// }
+
 process run_multiqc {
     cpus 1
     memory "2.G"
     time "30.m"
     container params.container_multiqc
-    // publishDir "${params.out_dir}/multiqc", mode: 'copy' 
     
 
     input:
-    tuple val(sample), path(cr_dir) 
+    path(inputs) 
+    val(name)
 
 
     output:
-    // path("${sample}/*")
-    tuple val(sample), path(out) 
+    path(output) 
 
 
     script:
-    out="${sample}/multiqc*"
+    output="multiqc"
+    title="${name} QC report"
     """
-    mkdir -p ${sample}
-    multiqc -f -o ${sample} $cr_dir
+    mkdir -p ${output}
+    multiqc -f -o ${output} -b "${title}" ${inputs}
     """
 }
 
-// Define the workflow by chaining the processes
+// entry workflow 
 workflow {
     main:
+    // 1. make the samplesheet for bcl-convert
     bcl_samplesheets_ch = bclconvert_samplesheets(
         file(params.sampletable),
         file(params.single_template),
@@ -201,12 +245,15 @@ workflow {
     // bcl_samplesheets_ch.legotek_samplesheet.view()
 
 
-    // generate fastq files from the bcl directory
+    // 2. generate fastq files from the bcl directory
+    
+    // 2a. gene expression fastqs
     fastq_gex_ch = demux_gex(
         file(params.bcl_dir),
         bcl_samplesheets_ch.gex_samplesheet
     )
 
+    // 2b. teknkik barcode fastqs
     fastq_legotek_ch = demux_legotek(
         file(params.bcl_dir),
         bcl_samplesheets_ch.legotek_samplesheet
@@ -215,7 +262,9 @@ workflow {
     // fastq_gex_ch.view()
     // fastq_legotek_ch.view()
 
-    // channel of sample names (from sampletable)
+    // 3. make the sample table for cellranger
+
+    // 3a. channel of sample IDs
     Channel.fromPath( params.sampletable )
         .splitCsv( header: true)
         .map { it.sample_id }
@@ -223,7 +272,7 @@ workflow {
 
     // sampletable_ch.view()
 
-    // create the library csv files
+    // 3b. create the library csv files
     library_csv_ch = cellranger_library(
         sampletable_ch,
         file(params.library_template)
@@ -231,6 +280,7 @@ workflow {
 
     // library_csv_ch.view()
 
+    // 4. run cellranger per sample
     cellranger_ch = cellranger_count(
         library_csv_ch,
         fastq_gex_ch,
@@ -241,15 +291,29 @@ workflow {
 
     // cellranger_ch.view()
 
+
+    // 5. run multiqc on the bcl-convert and cellranger outputs
+    // keep only the 2nd element from each tuple
+    // bcl_gex_path = fastq_gex_ch.map { sample, path -> path }
+    // bcl_legotek_path = fastq_legotek_ch.map { sample, path -> path }
+    // cr_path = cellranger_ch.map { sample, path -> path }
+
+    //     cr_path
+    //         .concat(bcl_gex_path)
+    //         .concat(bcl_legotek_path)
+    //         .collect()
+    //         .view()
+
     multiqc_ch = run_multiqc(
-        cellranger_ch
+        cellranger_ch.concat(fastq_gex_ch).concat(fastq_legotek_ch).collect(),
+        file(params.bcl_dir).baseName
     )
 
     publish:
     // cellranger_ch = cellranger_ch
     // multiqc_ch = multiqc_ch
     cellranger_ch >> "cellranger"
-    multiqc_ch >> "multiqc"
+    multiqc_ch >> "."
 }
 
 output {
