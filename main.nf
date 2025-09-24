@@ -2,9 +2,25 @@
 nextflow.enable.dsl=2
 
 
-// *
-// * It uses an Apptainer container specified by the 'params.container' parameter.
-// */
+// --- params banner (runs at script load) ---
+def _mask = { value, key ->
+    def k = key?.toLowerCase() ?: ''
+    ['password','pass','token','secret','apikey','api_key','key'].any { k.contains(it) } ? '********' : value
+}
+def _pp = { v ->
+    if( v instanceof java.nio.file.Path ) return v.toString()
+    if( v instanceof Collection )         return v.join(', ')
+    return v
+}
+
+log.info "-- Launching: ${workflow.manifest?.name ?: 'pipeline'} v${workflow.manifest?.version ?: 'dev'}"
+log.info "-- Run name : ${workflow.runName}"
+log.info "-- Workdir  : ${workflow.workDir}"
+log.info "----- PARAMS -----"
+params.keySet().sort().each { k ->
+    log.info String.format("  %-22s = %s", k, _mask(_pp(params[k]), k))
+}
+log.info "-------------------"
 
 // Process to create the bcl_dir samplesheets
 process bclconvert_samplesheets {
@@ -118,7 +134,7 @@ process cellranger_count {
     cpus 32
     memory "128.G"
     time {"1.0h"}
-    publishDir "${params.out_dir}/multiqc", mode: 'copy'
+    publishDir "${params.out_dir}/cellranger", mode: 'copy'
 
     input:
     tuple val(sample), path(library_csv)
@@ -149,7 +165,7 @@ process RUN_MULTIQC {
     memory "2.G"
     time "30.m"
     container params.container_multiqc
-    publishDir "multiqc/${params.out_dir}", mode: 'copy' 
+    publishDir "${params.out_dir}/multiqc", mode: 'copy' 
     
 
     input:
