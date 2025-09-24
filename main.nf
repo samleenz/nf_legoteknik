@@ -1,6 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
-
+nextflow.preview.output = true
 
 // --- params banner (runs at script load) ---
 def _mask = { value, key ->
@@ -134,7 +134,7 @@ process cellranger_count {
     cpus 32
     memory "128.G"
     time {"1.0h"}
-    publishDir "${params.out_dir}/cellranger", mode: 'copy'
+    // publishDir "${params.out_dir}/cellranger", mode: 'copy'
 
     input:
     tuple val(sample), path(library_csv)
@@ -144,12 +144,13 @@ process cellranger_count {
     path(feature_reference)
 
     output:
-    tuple val(sample), path("${sample}")
+    tuple val(sample), path(out)
 
     script:
+    out=sample
     """
     cellranger count \
-        --id=${sample} \
+        --id=${out} \
         --libraries=${library_csv} \
         --transcriptome=${txome} \
         --feature-ref=${feature_reference} \
@@ -160,12 +161,12 @@ process cellranger_count {
     """    
 }
 
-process RUN_MULTIQC {
+process run_multiqc {
     cpus 1
     memory "2.G"
     time "30.m"
     container params.container_multiqc
-    publishDir "${params.out_dir}/multiqc", mode: 'copy' 
+    // publishDir "${params.out_dir}/multiqc", mode: 'copy' 
     
 
     input:
@@ -173,11 +174,12 @@ process RUN_MULTIQC {
 
 
     output:
-    path("${sample}/*")
-    // tuple val(sample), path(output) 
+    // path("${sample}/*")
+    tuple val(sample), path(out) 
 
 
     script:
+    out="${sample}/multiqc*"
     """
     mkdir -p ${sample}
     multiqc -f -o ${sample} $cr_dir
@@ -186,6 +188,7 @@ process RUN_MULTIQC {
 
 // Define the workflow by chaining the processes
 workflow {
+    main:
     bcl_samplesheets_ch = bclconvert_samplesheets(
         file(params.sampletable),
         file(params.single_template),
@@ -238,8 +241,34 @@ workflow {
 
     // cellranger_ch.view()
 
-    multiqc_ch = RUN_MULTIQC(
+    multiqc_ch = run_multiqc(
         cellranger_ch
     )
 
+    publish:
+    // cellranger_ch = cellranger_ch
+    // multiqc_ch = multiqc_ch
+    cellranger_ch >> "cellranger"
+    multiqc_ch >> "multiqc"
 }
+
+output {
+  directory params.outputDir
+  mode 'copy'
+}
+
+// output {
+// //     cellranger_ch {
+// //     path { tup -> 
+// //       def (sample, outs) = tup
+// //       "cellranger/${sample}/"
+// //     }
+// //   }
+// //     multiqc_ch {
+// //     path { tup ->
+// //       def (sample, report) = tup
+// //       "multiqc/${sample}/"
+// //       }
+// //     }
+
+// }
