@@ -25,6 +25,14 @@ dual_template   <- args[3] # path to bclconvert_dual_template.txt
 single_index    <- args[4] # path to truseq_i7_indexes.json
 dual_index      <- args[5] # path to chromium_10X_indexes.json
 
+if(FALSE){
+  # for testing purposes
+  s_path          <- "data/example_sampletable.csv"
+  single_template <- "data/bcl_samplesheet_templates/bclconvert_single_template.txt" # path to bclconvert_single_template.txt
+  dual_template   <- "data/bcl_samplesheet_templates/bclconvert_dual_template.txt" # path to bclconvert_dual_template.txt
+  single_index    <- "data/truseq_i7_indexes.json" # path to truseq_i7_indexes.json
+  dual_index      <- "data/chromium_10X_indexes.json" # path to chromium_10X_indexes.json
+}
 
 ### custom functions -------------------------------------------------------
 
@@ -53,7 +61,7 @@ reverse_complement <- function(dna) {
 
 
 
-make_bcl_sheet <- function(index, type, revcomp = TRUE,
+make_bcl_sheet <- function(sID, index, type, revcomp = TRUE,
                            single_template, dual_template,
                            single_idx, dual_idx){
   if(type == "single"){
@@ -68,7 +76,7 @@ make_bcl_sheet <- function(index, type, revcomp = TRUE,
       purrr::list_c()
     
     # create sample IDs
-    sID <- as.character(glue::glue("S00{1:length(index)}"))  
+    # sID <- as.character(glue::glue("S00{1:length(index)}"))  
     
     # append the sample sheet lines
     bcl_sheet <- c(
@@ -97,7 +105,7 @@ make_bcl_sheet <- function(index, type, revcomp = TRUE,
 
     
     # create sample IDs
-    sID <- as.character(glue::glue("S00{1:length(index)}"))  
+    # sID <- as.character(glue::glue("S00{1:length(index)}"))  
     
     
     # append the sample sheet lines
@@ -119,6 +127,7 @@ sampletable <- read_csv(s_path)
 
 write_lines(
   make_bcl_sheet(
+    sampletable$sample_id,
     sampletable$feature_index, 
     "single",
     revcomp = TRUE,
@@ -130,6 +139,7 @@ write_lines(
 
 write_lines(
   make_bcl_sheet(
+    sampletable$sample_id,
     sampletable$gex_index,
     "dual",
     revcomp = TRUE,
