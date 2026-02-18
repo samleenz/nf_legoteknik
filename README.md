@@ -26,7 +26,7 @@ A nextflow DSL2 pipeline to process 10X scrnaseq using LeGO-teknik barcodes
 
 2. **Prepare the files**  
    
-> *_sampletable.csv
+> `*_sampletable.csv`
 
 ```plaintext
 sample_id,gex_index,feature_index

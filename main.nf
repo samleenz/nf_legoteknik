@@ -1,6 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
-nextflow.preview.output = true
+// nextflow.preview.output = true
 
 /////////////////////////////////////////
 ///////////// NF_LEGOTEKNIK /////////////
@@ -310,29 +310,33 @@ workflow {
     )
 
     publish:
-    // cellranger_ch = cellranger_ch
-    // multiqc_ch = multiqc_ch
-    cellranger_ch >> "cellranger"
-    multiqc_ch >> "."
+    cellranger_ch = cellranger_ch
+    multiqc_ch    = multiqc_ch
 }
 
 output {
-  directory params.outputDir
-  mode 'copy'
+  cellranger_ch {
+    path { p -> "cellranger" }   // p is the <sample>/ directory
+  }
+  multiqc_ch {
+    path { p -> "multiqc" }                    // p is the multiqc directory
+  }
 }
 
 // output {
-// //     cellranger_ch {
-// //     path { tup -> 
-// //       def (sample, outs) = tup
-// //       "cellranger/${sample}/"
-// //     }
-// //   }
-// //     multiqc_ch {
-// //     path { tup ->
-// //       def (sample, report) = tup
-// //       "multiqc/${sample}/"
-// //       }
-// //     }
+//     cellranger_ch {
+//     path { tup -> 
+//       def (sample, outs) = tup
+//       "cellranger/${sample}/"
+//     }
+//   }
+//     multiqc_ch {
+//     path { tup ->
+//       def (sample, report) = tup
+//       "multiqc/${sample}/"
+//       }
+//     }
 
 // }
+
+
