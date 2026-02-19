@@ -135,11 +135,11 @@ process merge_fastqs {
     tuple val(sample), val(gex_run_manifest), val(teknik_run_manifest)
 
     output:
-    tuple val(sample), path(sample)
+    tuple val(sample), path("merged_fastqs")
 
     script:
     """
-    mkdir -p ${sample}/gex ${sample}/teknik
+    mkdir -p merged_fastqs/gex merged_fastqs/teknik
 
     cat > gex_runs.tsv <<'EOF'
 ${gex_run_manifest}
@@ -182,20 +182,25 @@ EOF
         fi
       done
 
-      return "\$found_any"
+      # Shell convention: 0 = success (files found), 1 = no files found
+      if [ "\$found_any" -eq 1 ]; then
+        return 0
+      else
+        return 1
+      fi
     }
 
-    merge_modality gex_runs.tsv "${sample}/gex"
-    if [ \$? -eq 0 ]; then
+    if ! merge_modality gex_runs.tsv "merged_fastqs/gex"; then
       echo "No GEX fastqs found for sample ${sample} across runs" >&2
       exit 1
     fi
-    if [ ! -s "${sample}/gex/${sample}_S1_R1_001.fastq.gz" ] || [ ! -s "${sample}/gex/${sample}_S1_R2_001.fastq.gz" ]; then
+    if [ ! -s "merged_fastqs/gex/${sample}_S1_R1_001.fastq.gz" ] || [ ! -s "merged_fastqs/gex/${sample}_S1_R2_001.fastq.gz" ]; then
       echo "Merged GEX fastqs for ${sample} must include both R1 and R2" >&2
       exit 1
     fi
 
-    merge_modality teknik_runs.tsv "${sample}/teknik"
+    # teknik is optional; ignore non-zero return when absent
+    merge_modality teknik_runs.tsv "merged_fastqs/teknik" || true
     """
 }
 
@@ -226,9 +231,9 @@ process cellranger_library {
 //   where --create-bam and --nosecondary are toggled.
 process cellranger_count {
     container params.container_cellranger 
-    cpus 32
+    cpus 24
     memory "128.G"
-    time {"1.0h"}
+    time {"4.0h"}
     // publishDir "${params.out_dir}/cellranger", mode: 'copy'
 
     input:
@@ -250,14 +255,17 @@ process cellranger_count {
       exit 1
     fi
 
+    gex_abs_path="\$(realpath "${merged_fastqs}/gex")"
+    teknik_abs_path="\$(realpath "${merged_fastqs}/teknik")"
+
     cat > lib.csv <<EOF
 fastqs,sample,library_type
-${merged_fastqs}/gex,${sample},Gene Expression
+\${gex_abs_path},${sample},Gene Expression
 EOF
 
     feature_ref_arg=""
     if [ "\$teknik_any_count" -gt 0 ]; then
-      echo "${merged_fastqs}/teknik,${sample},Antibody Capture" >> lib.csv
+      echo "\${teknik_abs_path},${sample},Antibody Capture" >> lib.csv
       feature_ref_arg="--feature-ref=${feature_reference}"
     fi
 
@@ -393,7 +401,7 @@ workflow {
 
     demux_gex_input_ch = run_gex_ch
         .combine(bcl_samplesheets_ch.gex_samplesheet)
-        .map { run_tuple, gex_sheet -> tuple(run_tuple[0], run_tuple[1], gex_sheet) }
+        .map { row -> tuple(row[0], row[1], row[2]) }
 
     fastq_gex_by_run_ch = demux_gex(demux_gex_input_ch)
     fastq_gex_ch = fastq_gex_by_run_ch.map { run_id, p -> p }
@@ -405,7 +413,7 @@ workflow {
 
     demux_legotek_input_ch = run_legotek_ch
         .combine(bcl_samplesheets_ch.legotek_samplesheet)
-        .map { run_tuple, legotek_sheet -> tuple(run_tuple[0], run_tuple[1], legotek_sheet) }
+        .map { row -> tuple(row[0], row[1], row[2]) }
 
     fastq_legotek_by_run_ch = demux_legotek(demux_legotek_input_ch)
     fastq_legotek_ch = fastq_legotek_by_run_ch.map { run_id, p -> p }
@@ -425,13 +433,13 @@ workflow {
 
     // 3b. collect run-level fastq outputs so each sample can be merged across runs
     gex_run_manifest_ch = fastq_gex_by_run_ch
-        .collect()
+        .collect(flat: false)
         .map { runs ->
             runs.collect { run_id, run_dir -> "${run_id}\t${run_dir}" }.join('\n')
         }
 
     teknik_run_manifest_ch = fastq_legotek_by_run_ch
-        .collect()
+        .collect(flat: false)
         .map { runs ->
             runs.collect { run_id, run_dir -> "${run_id}\t${run_dir}" }.join('\n')
         }
@@ -439,9 +447,7 @@ workflow {
     merge_fastqs_input_ch = sampletable_ch
         .combine(gex_run_manifest_ch)
         .combine(teknik_run_manifest_ch)
-        .map { sample_gex, teknik_manifest ->
-            tuple(sample_gex[0], sample_gex[1], teknik_manifest)
-        }
+        .map { row -> tuple(row[0], row[1], row[2]) }
 
     merged_fastqs_ch = merge_fastqs(merge_fastqs_input_ch)
 
