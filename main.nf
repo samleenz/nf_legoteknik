@@ -425,13 +425,13 @@ workflow {
 
     // 3b. collect run-level fastq outputs so each sample can be merged across runs
     gex_run_manifest_ch = fastq_gex_by_run_ch
-        .collect()
+        .collect(flat: false)
         .map { runs ->
             runs.collect { run_id, run_dir -> "${run_id}\t${run_dir}" }.join('\n')
         }
 
     teknik_run_manifest_ch = fastq_legotek_by_run_ch
-        .collect()
+        .collect(flat: false)
         .map { runs ->
             runs.collect { run_id, run_dir -> "${run_id}\t${run_dir}" }.join('\n')
         }
