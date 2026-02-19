@@ -231,9 +231,9 @@ process cellranger_library {
 //   where --create-bam and --nosecondary are toggled.
 process cellranger_count {
     container params.container_cellranger 
-    cpus 32
+    cpus 24
     memory "128.G"
-    time {"1.0h"}
+    time {"4.0h"}
     // publishDir "${params.out_dir}/cellranger", mode: 'copy'
 
     input:
