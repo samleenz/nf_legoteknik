@@ -182,11 +182,15 @@ EOF
         fi
       done
 
-      return "\$found_any"
+      # Shell convention: 0 = success (files found), 1 = no files found
+      if [ "\$found_any" -eq 1 ]; then
+        return 0
+      else
+        return 1
+      fi
     }
 
-    merge_modality gex_runs.tsv "${sample}/gex"
-    if [ \$? -eq 0 ]; then
+    if ! merge_modality gex_runs.tsv "${sample}/gex"; then
       echo "No GEX fastqs found for sample ${sample} across runs" >&2
       exit 1
     fi
@@ -195,7 +199,8 @@ EOF
       exit 1
     fi
 
-    merge_modality teknik_runs.tsv "${sample}/teknik"
+    # teknik is optional; ignore non-zero return when absent
+    merge_modality teknik_runs.tsv "${sample}/teknik" || true
     """
 }
 
