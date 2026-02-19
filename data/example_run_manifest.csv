@@ -1,0 +1,3 @@
+run_id,bcl_dir,has_gex,has_teknik
+runA,/data/Analysis/Lab_TPH/datasets_raw/TPH_SGRESIST_L002,true,true
+runB,/data/Analysis/Lab_TPH/datasets_raw/TPH_SGRESIST_L003,true,false
