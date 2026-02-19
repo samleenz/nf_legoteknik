@@ -255,14 +255,17 @@ process cellranger_count {
       exit 1
     fi
 
+    gex_abs_path="\$(realpath "${merged_fastqs}/gex")"
+    teknik_abs_path="\$(realpath "${merged_fastqs}/teknik")"
+
     cat > lib.csv <<EOF
 fastqs,sample,library_type
-${merged_fastqs}/gex,${sample},Gene Expression
+\${gex_abs_path},${sample},Gene Expression
 EOF
 
     feature_ref_arg=""
     if [ "\$teknik_any_count" -gt 0 ]; then
-      echo "${merged_fastqs}/teknik,${sample},Antibody Capture" >> lib.csv
+      echo "\${teknik_abs_path},${sample},Antibody Capture" >> lib.csv
       feature_ref_arg="--feature-ref=${feature_reference}"
     fi
 
