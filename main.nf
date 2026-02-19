@@ -393,7 +393,7 @@ workflow {
 
     demux_gex_input_ch = run_gex_ch
         .combine(bcl_samplesheets_ch.gex_samplesheet)
-        .map { run_tuple, gex_sheet -> tuple(run_tuple[0], run_tuple[1], gex_sheet) }
+        .map { row -> tuple(row[0], row[1], row[2]) }
 
     fastq_gex_by_run_ch = demux_gex(demux_gex_input_ch)
     fastq_gex_ch = fastq_gex_by_run_ch.map { run_id, p -> p }
@@ -405,7 +405,7 @@ workflow {
 
     demux_legotek_input_ch = run_legotek_ch
         .combine(bcl_samplesheets_ch.legotek_samplesheet)
-        .map { run_tuple, legotek_sheet -> tuple(run_tuple[0], run_tuple[1], legotek_sheet) }
+        .map { row -> tuple(row[0], row[1], row[2]) }
 
     fastq_legotek_by_run_ch = demux_legotek(demux_legotek_input_ch)
     fastq_legotek_ch = fastq_legotek_by_run_ch.map { run_id, p -> p }
@@ -439,9 +439,7 @@ workflow {
     merge_fastqs_input_ch = sampletable_ch
         .combine(gex_run_manifest_ch)
         .combine(teknik_run_manifest_ch)
-        .map { sample_gex, teknik_manifest ->
-            tuple(sample_gex[0], sample_gex[1], teknik_manifest)
-        }
+        .map { row -> tuple(row[0], row[1], row[2]) }
 
     merged_fastqs_ch = merge_fastqs(merge_fastqs_input_ch)
 
