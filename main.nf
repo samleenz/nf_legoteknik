@@ -135,11 +135,11 @@ process merge_fastqs {
     tuple val(sample), val(gex_run_manifest), val(teknik_run_manifest)
 
     output:
-    tuple val(sample), path(sample)
+    tuple val(sample), path("merged_fastqs")
 
     script:
     """
-    mkdir -p ${sample}/gex ${sample}/teknik
+    mkdir -p merged_fastqs/gex merged_fastqs/teknik
 
     cat > gex_runs.tsv <<'EOF'
 ${gex_run_manifest}
@@ -190,17 +190,17 @@ EOF
       fi
     }
 
-    if ! merge_modality gex_runs.tsv "${sample}/gex"; then
+    if ! merge_modality gex_runs.tsv "merged_fastqs/gex"; then
       echo "No GEX fastqs found for sample ${sample} across runs" >&2
       exit 1
     fi
-    if [ ! -s "${sample}/gex/${sample}_S1_R1_001.fastq.gz" ] || [ ! -s "${sample}/gex/${sample}_S1_R2_001.fastq.gz" ]; then
+    if [ ! -s "merged_fastqs/gex/${sample}_S1_R1_001.fastq.gz" ] || [ ! -s "merged_fastqs/gex/${sample}_S1_R2_001.fastq.gz" ]; then
       echo "Merged GEX fastqs for ${sample} must include both R1 and R2" >&2
       exit 1
     fi
 
     # teknik is optional; ignore non-zero return when absent
-    merge_modality teknik_runs.tsv "${sample}/teknik" || true
+    merge_modality teknik_runs.tsv "merged_fastqs/teknik" || true
     """
 }
 
