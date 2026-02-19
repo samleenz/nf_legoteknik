@@ -314,7 +314,7 @@ process run_multiqc {
     
 
     input:
-    path(inputs) 
+    path(inputs, stageAs: 'multiqc_inputs/input??/*')
     val(name)
 
 
@@ -327,7 +327,7 @@ process run_multiqc {
     title="${name} QC report"
     """
     mkdir -p ${output}
-    multiqc -f -o ${output} -b "${title}" ${inputs}
+    multiqc -f -o ${output} -b "${title}" multiqc_inputs
     """
 }
 
