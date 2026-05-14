@@ -8,14 +8,16 @@ library(tidyverse)
 ### commandline arguments ------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 5) {
+if (length(args) < 7) {
   stop("
   Usage: make_bcl_sheet.R \\
     <sampletable.csv> \\
     <single_template.txt> \\
     <dual_template.txt> \\
     <single_index.json> \\
-    <dual_index.json>
+    <dual_index.json> \\
+    <feature_index_type: single|dual> \\
+    <gex_index_type: single|dual>
   ")
 }
 
@@ -24,6 +26,16 @@ single_template <- args[2] # path to bclconvert_single_template.txt
 dual_template   <- args[3] # path to bclconvert_dual_template.txt
 single_index    <- args[4] # path to truseq_i7_indexes.json
 dual_index      <- args[5] # path to chromium_10X_indexes.json
+feature_index_type <- tolower(args[6]) # single or dual
+gex_index_type     <- tolower(args[7]) # single or dual
+
+valid_index_types <- c("single", "dual")
+if (!feature_index_type %in% valid_index_types) {
+  stop("feature_index_type must be one of: single, dual")
+}
+if (!gex_index_type %in% valid_index_types) {
+  stop("gex_index_type must be one of: single, dual")
+}
 
 if(FALSE){
   # for testing purposes
@@ -32,6 +44,8 @@ if(FALSE){
   dual_template   <- "data/bcl_samplesheet_templates/bclconvert_dual_template.txt" # path to bclconvert_dual_template.txt
   single_index    <- "data/truseq_i7_indexes.json" # path to truseq_i7_indexes.json
   dual_index      <- "data/chromium_10X_indexes.json" # path to chromium_10X_indexes.json
+  feature_index_type <- "single"
+  gex_index_type <- "dual"
 }
 
 ### custom functions -------------------------------------------------------
@@ -129,7 +143,7 @@ write_lines(
   make_bcl_sheet(
     sampletable$sample_id,
     sampletable$feature_index, 
-    "single",
+    feature_index_type,
     revcomp = TRUE,
     single_template, dual_template,
     single_index, dual_index
@@ -141,7 +155,7 @@ write_lines(
   make_bcl_sheet(
     sampletable$sample_id,
     sampletable$gex_index,
-    "dual",
+    gex_index_type,
     revcomp = TRUE,
     single_template, dual_template,
     single_index, dual_index

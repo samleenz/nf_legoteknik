@@ -41,16 +41,19 @@ params {
     outputDir      = '/data/Analysis/Lab_TPH/scrnaseq_legotek/{{NAME}}'
     bcl_dir      = '/data/Analysis/Lab_TPH/datasets_raw/{{NAME}}'
     sampletable  = '{{NAME}}_sampletable.csv'
+    feature_index_type = 'single'
+    gex_index_type     = 'dual'
     transcriptome = '/data/Analysis/Lab_TPH/references/10X/refdata-gex-GRCh38_and_GRCm39-2024-A'
 }
 ```
+
+`feature_index_type` and `gex_index_type` can be set to either `single` or `dual`.
 
 3. **Run the Pipeline**  
    Launch the pipeline with:
    ```bash
    nextflow run main.nf -resume -with-report {{NAME}}_report.html -c {{NAME}}_config.config
    ```
-
 
 
 
