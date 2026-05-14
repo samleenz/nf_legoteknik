@@ -54,6 +54,8 @@ process bclconvert_samplesheets {
     path(dual_template)
     path(single_index)
     path(dual_index)
+    val(feature_index_type)
+    val(gex_index_type)
 
     output:
     path("gex_samplesheet.csv"), emit: gex_samplesheet
@@ -64,7 +66,8 @@ process bclconvert_samplesheets {
     """
     make_bclconvert_samplesheets.R ${sampletable} \
         ${single_template} ${dual_template} \
-        ${single_index} ${dual_index} 
+        ${single_index} ${dual_index} \
+        "${feature_index_type}" "${gex_index_type}"
     """
 }
 
@@ -385,7 +388,9 @@ workflow {
         file(params.single_template),
         file(params.dual_template),
         file(params.single_index),
-        file(params.dual_index)
+        file(params.dual_index),
+        params.feature_index_type,
+        params.gex_index_type
     )
 
     // bcl_samplesheets_ch.gex_samplesheet.view()
