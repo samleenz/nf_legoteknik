@@ -9,6 +9,7 @@ nextflow.enable.dsl=2
 /////////////////////////////////////////
 
 // Pipeline overview
+    // 0. stage the bcl run directories from the fileserver into the work dir
     // 1. make the samplesheet for bcl-convert
     // 2. generate fastq files from the bcl directory
     //      2a. gene expression fastqs
@@ -40,6 +41,26 @@ params.keySet().sort().each { k ->
     log.info String.format("  %-22s = %s", k, _mask(_pp(params[k]), k))
 }
 log.info "-------------------"
+
+// Process to copy a bcl run directory from the fileserver into the work dir
+// - run_dir is symlinked into the task dir under its basename, so spaces in
+//   the fileserver parent path never reach the script
+// - the staged copy lives in the work dir and is removed by `cleanup = true`
+//   after a successful run
+process STAGE_BCL {
+    tag "${run_dir.name}"
+
+    input:
+    path run_dir
+
+    output:
+    path "${run_dir.name}_staged", emit: bcl
+
+    script:
+    """
+    rsync -a --exclude 'Thumbnail_Images' --exclude 'Logs' "${run_dir}/" "${run_dir.name}_staged/"
+    """
+}
 
 // Process to create the bcl_dir samplesheets
 process bclconvert_samplesheets {
@@ -334,17 +355,35 @@ process run_multiqc {
     """
 }
 
-// entry workflow 
+// `cleanup = true` only removes tasks run in the current session, so after a
+// resumed run succeeds, task dirs reused from earlier failed attempts (incl.
+// staged BCLs) are left behind; print the commands to remove them
+workflow.onComplete {
+    if( workflow.success && workflow.resume ) {
+        log.warn """\
+            This run was resumed: task dirs from earlier attempts of this session
+            (including staged BCLs) are still in ${workflow.workDir}
+            Once you've checked the results, remove them with:
+
+              cd '${workflow.launchDir}'
+              nextflow log | awk -F'\\t' '\$6 ~ /${workflow.sessionId}/ {print \$3}' | xargs -n1 nextflow clean -f
+            """.stripIndent()
+    }
+}
+
+// entry workflow
 workflow {
     main:
-    // 0. parse run manifest (or fallback to single run from params.bcl_dir)
-    // expected run_manifest columns: run_id,bcl_dir,has_gex,has_teknik
+    // 0. parse run manifest (or fallback to single run from params.run_dir)
+    // expected run_manifest columns: run_id,run_dir,has_gex,has_teknik
+    // run_dir values are fileserver paths; they are checked here so the run
+    // fails at launch if the mount isn't readable (e.g. cifscreds not set up)
     if( params.run_manifest ) {
         Channel.fromPath(params.run_manifest)
             .ifEmpty { error "run_manifest not found: ${params.run_manifest}" }
             .splitCsv(header: true)
             .map { row ->
-                ['run_id','bcl_dir','has_gex','has_teknik'].each { required_col ->
+                ['run_id','run_dir','has_gex','has_teknik'].each { required_col ->
                     if( !row.containsKey(required_col) ) {
                         error "run_manifest is missing required column: ${required_col}"
                     }
@@ -359,21 +398,23 @@ workflow {
 
                 tuple(
                     row.run_id.toString(),
-                    file(row.bcl_dir.toString()),
+                    file(row.run_dir.toString(), checkIfExists: true),
                     normBool(row.has_gex),
                     normBool(row.has_teknik)
                 )
             }
             .set { run_manifest_ch }
     } else {
-        if( !params.bcl_dir ) {
-            error "Set either params.run_manifest or params.bcl_dir"
+        if( !params.run_dir ) {
+            error "Set either params.run_manifest or params.run_dir"
         }
+
+        def run_dir = file(params.run_dir, checkIfExists: true)
 
         Channel.of(
             tuple(
-                file(params.bcl_dir).baseName,
-                file(params.bcl_dir),
+                run_dir.baseName,
+                run_dir,
                 true,
                 true
             )
@@ -381,6 +422,20 @@ workflow {
     }
 
     // run_manifest_ch.view()
+
+    // 0b. stage each run dir once, then swap the fileserver path for the
+    //     staged copy (matched on the run dir basename, which is unique)
+    STAGE_BCL(
+        run_manifest_ch.map { run_id, run_dir, has_gex, has_teknik -> run_dir }.unique()
+    )
+
+    staged_bcl_ch = STAGE_BCL.out.bcl
+        .map { staged -> tuple(staged.name.replaceFirst(/_staged$/, ''), staged) }
+
+    run_staged_ch = run_manifest_ch
+        .map { run_id, run_dir, has_gex, has_teknik -> tuple(run_dir.name, run_id, has_gex, has_teknik) }
+        .combine(staged_bcl_ch, by: 0)
+        .map { run_name, run_id, has_gex, has_teknik, staged -> tuple(run_id, staged, has_gex, has_teknik) }
 
     // 1. make the samplesheet for bcl-convert
     bcl_samplesheets_ch = bclconvert_samplesheets(
@@ -400,7 +455,7 @@ workflow {
     // 2. generate fastq files from bcl directories listed in run manifest
 
     // 2a. gene expression fastqs
-    run_gex_ch = run_manifest_ch
+    run_gex_ch = run_staged_ch
         .filter { run_id, bcl_dir, has_gex, has_teknik -> has_gex }
         .map { run_id, bcl_dir, has_gex, has_teknik -> tuple(run_id, bcl_dir) }
 
@@ -412,7 +467,7 @@ workflow {
     fastq_gex_ch = fastq_gex_by_run_ch.map { run_id, p -> p }
 
     // 2b. teknkik barcode fastqs
-    run_legotek_ch = run_manifest_ch
+    run_legotek_ch = run_staged_ch
         .filter { run_id, bcl_dir, has_gex, has_teknik -> has_teknik }
         .map { run_id, bcl_dir, has_gex, has_teknik -> tuple(run_id, bcl_dir) }
 
@@ -478,9 +533,15 @@ workflow {
     //         .collect()
     //         .view()
 
+    // report title: run dir name for a single run, joined run IDs for a manifest
+    multiqc_name_ch = run_manifest_ch
+        .map { run_id, run_dir, has_gex, has_teknik -> run_id }
+        .collect()
+        .map { ids -> ids.unique().join('_') }
+
     multiqc_ch = run_multiqc(
         cellranger_ch.concat(fastq_gex_ch).concat(fastq_legotek_ch).collect(),
-        file(params.bcl_dir).baseName
+        multiqc_name_ch
     )
 
     publish:
